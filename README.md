@@ -1,6 +1,5 @@
 # Liver Segmentation
 
-
 ### Introduction
 Semantic segmentation is an image processing technique that consists of 
 assigning labels to each pixel in an image. This technique 
@@ -20,14 +19,14 @@ adjacent tissues. This technique is useful in many medical fields, such as plann
 surgical interventions, guiding interventional procedures, assessing and 
 diagnosis, and research and development of new therapies and treatments.
 
+
 ### 3D-Unet Architecture
 This architecture is an extension of the U-Net architecture presented above 
 for semantic processing and segmentation in volumetric data. One can observe the principle 
 of structuring it also based on an encoder and decoder, the only difference being only the 
 adding an extra dimension to the input and output data.
 
-
-
+![WhatsApp Image 2024-01-27 at 18 12 35_8f66c8a5](https://github.com/LutaVladCristian/Liver_Segmentation/assets/62925188/7820e30c-b2d4-4a8c-8f9c-9f1c90a577dc)
 
 
 
