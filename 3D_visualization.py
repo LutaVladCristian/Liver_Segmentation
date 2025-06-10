@@ -30,7 +30,7 @@ def visualize_volumes(data_in):
     plt.show(viewup="z").close()
 
     # Marching Cubes
-    plt = IsosurfaceBrowser(vol, use_gpu=True, c='gold') # Plotter instance
+    plt = IsosurfaceBrowser(vol2, use_gpu=True, c='gold') # Plotter instance
     plt.show(axes=7, bg2='lb').close()
 
 visualize_volumes('volumes')
