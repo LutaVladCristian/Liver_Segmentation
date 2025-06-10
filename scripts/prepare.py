@@ -6,31 +6,6 @@ import nibabel as nib
 import numpy as np
 
 
-# The input paths for the dicom files
-in_path = ['data_set/dicom_files_testing/images', 
-            'data_set/dicom_files_testing/labels', 
-            'data_set/dicom_files_training/images',
-            'data_set/dicom_files_training/labels',
-            'data_set/dicom_files_validation/images',
-            'data_set/dicom_files_validation/labels']
-
-# The output paths for the dicom files split into equal groups
-group_path = ['data_set_group/dicom_files_testing/images', 
-            'data_set_group/dicom_files_testing/labels', 
-            'data_set_group/dicom_files_training/images',
-            'data_set_group/dicom_files_training/labels',
-            'data_set_group/dicom_files_validation/images',
-            'data_set_group/dicom_files_validation/labels']
-
-# The output paths for the nifti files
-nif_path = ['data_set_group_nif/nif_files_testing/images', 
-            'data_set_group_nif/nif_files_testing/labels', 
-            'data_set_group_nif/nif_files_training/images',
-            'data_set_group_nif/nif_files_training/labels',
-            'data_set_group_nif/nif_files_validation/images',
-            'data_set_group_nif/nif_files_validation/labels']
-
-
 # Function to group equaly the dicom files
 def divide_groups(data_in, data_out, minNr_slices=64):
 
@@ -88,30 +63,23 @@ def divide_groups(data_in, data_out, minNr_slices=64):
                     print(e)
                     pass
 
-    # Delete the folders for the groups
-    try:
-        shutil.rmtree('data_set')
-    except:
-        pass
-divide_groups(in_path, group_path, 16)
-
 
 # Function to convert the dicom files back to nifti
 def convert_nif(data_in, data_out):
 
     # Create the folders for the nifti files
     try:
-        os.mkdir('data_set_group_nif')
+        os.mkdir('../data_set_group_nif')
 
-        os.mkdir('data_set_group_nif/nif_files_testing')
+        os.mkdir('../data_set_group_nif/nif_files_testing')
         os.mkdir(data_out[0])
         os.mkdir(data_out[1])
 
-        os.mkdir('data_set_group_nif/nif_files_training')
+        os.mkdir('../data_set_group_nif/nif_files_training')
         os.mkdir(data_out[2])
         os.mkdir(data_out[3])
 
-        os.mkdir('data_set_group_nif/nif_files_validation')
+        os.mkdir('../data_set_group_nif/nif_files_validation')
         os.mkdir(data_out[4])
         os.mkdir(data_out[5])
 
@@ -130,7 +98,6 @@ def convert_nif(data_in, data_out):
         shutil.rmtree('data_set_group')
     except:
         pass
-convert_nif(group_path, nif_path)
 
 
 # Function to remove empty groups
@@ -156,4 +123,3 @@ def remove_empty_groups(data_in):
                 except Exception as e:
                     print(e)
                     pass
-remove_empty_groups(nif_path)

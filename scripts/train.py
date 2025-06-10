@@ -42,4 +42,4 @@ except:
 
 # Train the model
 if __name__ == '__main__':
-    train(model, data_in, loss_function, optimizer, 10, 'post_training_best', test_interval=100, device=device)
+    train(model, data_in, loss_function, optimizer, 10, '../post_training_best', test_interval=100, device=device)
