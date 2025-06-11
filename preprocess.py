@@ -15,12 +15,16 @@ from monai.transforms import (
     Resized,
     ToTensord,
     Spacingd,
+    RandCropByPosNegLabeld,
+    RandCropByLabelClassesd,
+    RandSpatialCropd,
+    DivisiblePadd,
 )
 
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-def preprocess_data(data_path, batch_size=1, spatial_size=(256, 256, 16)):
+def preprocess_data(data_path, batch_size=8, spatial_size=(256, 256, 16)):
     
     set_determinism(seed=0)
     
@@ -35,35 +39,32 @@ def preprocess_data(data_path, batch_size=1, spatial_size=(256, 256, 16)):
     test_files = [{"image": image_name, "label": label_name} for image_name, label_name in zip(test_data, test_labels)]
 
     # Transforms for the training with data augmentation
-    train_transforms = Compose(# Compose transforms together
-        [
-            LoadImaged(keys=["image", "label"]), # Load the images
-            EnsureChannelFirstd(keys=["image", "label"]), # Ensure the channel is the first dimension of the image
-            Spacingd(keys=["image", "label"], pixdim=(1.5, 1.5, 2.0), mode=("bilinear", "nearest")), # Resample the images
-            Orientationd(keys=["image", "label"], axcodes="RAS"), # Change the orientation of the image
-            ScaleIntensityRanged(keys=["image"], a_min=-200, a_max=200, b_min=0.0, b_max=1.0, clip=True),# Change the contrast of the image and gives the image pixels, 
-                                                                                                            #values between 0 and 1
-            CropForegroundd(keys=["image", "label"], source_key="image"), # Crop foreground of the image
-            RandAffined(keys=['image', 'label'], prob=0.5, translate_range=10), # Randomly shift the image
-            RandRotated(keys=['image', 'label'], prob=0.5, range_x=10.0), # Randomly rotate the image
-            RandGaussianNoised(keys='image', prob=0.5), # Add random noise to the image
-            Resized(keys=["image", "label"], spatial_size=spatial_size), # Resize the image
-            ToTensord(keys=["image", "label"]), # Convert the images to tensors
-        ]
-    )
+    train_transforms = Compose([
+        LoadImaged(keys=["image", "label"]),
+        EnsureChannelFirstd(keys=["image", "label"]),
+        Spacingd(keys=["image", "label"], pixdim=(1.5, 1.5, 2.0), mode=("bilinear", "nearest")),
+        Orientationd(keys=["image", "label"], axcodes="RAS"),
+        ScaleIntensityRanged(keys=["image"], a_min=-200, a_max=200, b_min=0.0, b_max=1.0, clip=True),
+        CropForegroundd(keys=["image", "label"], source_key="image"),
+        Resized(keys=["image", "label"], spatial_size=spatial_size),  # Common size
+        RandSpatialCropd(keys=["image", "label"], roi_size=spatial_size, random_size=False),  # Random crop
+        ToTensord(keys=["image", "label"]),
+    ])
 
     # Transforms for the testing
     test_transforms = Compose(# Compose transforms together
         [
-            LoadImaged(keys=["image", "label"]), # Load the images
-            EnsureChannelFirstd(keys=["image", "label"]), # Ensure the channel is the first dimension of the image
-            Spacingd(keys=["image", "label"], pixdim=(1.5, 1.5, 2.0), mode=("bilinear", "nearest")), # Resample the images
-            Orientationd(keys=["image", "label"], axcodes="RAS"), # Change the orientation of the image
-            ScaleIntensityRanged(keys=["image"], a_min=-200, a_max=200, b_min=0.0, b_max=1.0, clip=True),# Change the contrast of the image and gives the image pixels, 
-                                                                                                            #values between 0 and 1
-            CropForegroundd(keys=["image", "label"], source_key="image"), # Crop foreground of the image
-            Resized(keys=["image", "label"], spatial_size=spatial_size), # Resize the image
-            ToTensord(keys=["image", "label"]), # Convert the images to tensors
+            LoadImaged(keys=["image", "label"]),  # Load the images
+            EnsureChannelFirstd(keys=["image", "label"]),  # Ensure the channel is the first dimension of the image
+            Spacingd(keys=["image", "label"], pixdim=(1.5, 1.5, 2.0), mode=("bilinear", "nearest")),
+            # Resample the images
+            Orientationd(keys=["image", "label"], axcodes="RAS"),  # Change the orientation of the image
+            ScaleIntensityRanged(keys=["image"], a_min=-200, a_max=200, b_min=0.0, b_max=1.0, clip=True),
+            # Change the contrast of the image and gives the image pixels,
+            # values between 0 and 1
+            CropForegroundd(keys=["image", "label"], source_key="image"),  # Crop foreground of the image
+            Resized(keys=["image", "label"], spatial_size=spatial_size),  # Resize the image
+            ToTensord(keys=["image", "label"]),  # Convert the images to tensors
         ]
     )
 
