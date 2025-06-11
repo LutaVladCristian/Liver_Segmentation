@@ -4,5 +4,5 @@
 /.conda
 /data_set_group_nif
 /volumes
-/post_training_best
+/trained_models
 /data_set

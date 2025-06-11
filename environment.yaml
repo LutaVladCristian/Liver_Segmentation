@@ -22,3 +22,5 @@ dependencies:
       - vedo
       - glob2
       - tqdm
+      - seaborn
+      - scikit-learn
