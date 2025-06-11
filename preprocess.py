@@ -17,11 +17,6 @@ from monai.transforms import (
     Spacingd,
 )
 
-# The input paths for the prepared nifti files
-nif_path = ['data_set_group_nif/nif_files_testing/images', 
-            'data_set_group_nif/nif_files_testing/labels', 
-            'data_set_group_nif/nif_files_training/images',
-            'data_set_group_nif/nif_files_training/labels',]
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
