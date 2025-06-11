@@ -74,12 +74,4 @@ def preprocess_data(data_path, batch_size=1, spatial_size=(256, 256, 16)):
     test_ds = CacheDataset(data=test_files, transform=test_transforms)
     test_loader = DataLoader(test_ds, batch_size=batch_size)
 
-    '''for data in train_loader:
-        print(data["image"].shape)
-        print(data["label"].shape)
-    
-    for data in test_loader:
-        print(data["image"].shape)
-        print(data["label"].shape)'''
-
     return train_loader, test_loader

@@ -1,9 +1,11 @@
 from monai.utils import first
 import matplotlib.pyplot as plt
 import torch
+from torch.cuda.amp import autocast, GradScaler
 import os
 import numpy as np
 from monai.losses import DiceLoss
+from monai.metrics import DiceMetric
 
 # Function for visualizing data
 def show_patient(data, SLICE_NUMBER=1):
@@ -19,113 +21,153 @@ def show_patient(data, SLICE_NUMBER=1):
     plt.imshow(view_patient["label"][0, 0, :, :, SLICE_NUMBER])
     plt.show()
 
-# Metric for evaluating the model (Dice coefficient)
-def dice_metric(y_pred, y):
-    dice_loss = DiceLoss(to_onehot_y=True, sigmoid=True, squared_pred=True)
-    dice_coeff = 1 - dice_loss(y_pred, y).item()
-    return dice_coeff
 
 # Function for training the model
 def train(
-        model,
-        data_in,
-        loss_function,
-        optimizer,
-        max_epochs,
-        model_dir,
-        test_interval=1,
-        device=torch.device('cuda:0')
-    ):
-    best_metric = -1
-    best_metric_epoch = -1
-    save_loss_train = []
-    save_loss_test = []
-    save_metric_train = []
-    save_metric_test = []
+    model,
+    data_in,
+    num_classes,
+    loss_function,
+    optimizer,
+    max_epochs,
+    model_dir,
+    test_interval=1,
+    device=torch.device('cuda:0')
+):
     train_loader, test_loader = data_in
 
-    for epoch in range(max_epochs):
-        model.train()
-        train_epoch_loss = 0
-        train_step = 0
-        train_epoch_metric = 0
+    dice_metric = DiceMetric(include_background=False, reduction="none", get_not_nans=False)
+    scaler = GradScaler()
 
-        for batch_data in train_loader:
-            train_step += 1
-            volumes = batch_data["image"]
-            labels = batch_data["label"]
-            labels = labels != 0
-            volumes = volumes.to(device)
-            labels = labels.to(device)
+    # Tracking
+    best_metric = -1
+    best_metric_epoch = -1
+    save_loss_train, save_loss_test = [], []
+    save_metric_train, save_metric_test = [], []
+
+    for epoch in range(max_epochs):
+        print(f"\n--- Epoch {epoch + 1}/{max_epochs} ---")
+        model.train()
+        train_loss_total = 0.0
+        train_dice_sum = torch.zeros(num_classes - 1, device=device)  # skip background
+        steps = 0
+
+        for step, batch_data in enumerate(train_loader):
+            volumes = batch_data["image"].to(device)
+            labels = batch_data["label"].to(device)
 
             optimizer.zero_grad()
-            outputs = model(volumes)
+            with autocast(device_type=device.type):
+                outputs = model(volumes)
+                loss = loss_function(outputs, labels)
 
-            train_loss = loss_function(outputs, labels)
+            if device.type == 'cuda':
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
 
-            train_loss.backward()
-            optimizer.step()
+            with torch.no_grad():
+                preds = torch.softmax(outputs, dim=1)
+                labels_onehot = one_hot(labels, num_classes=num_classes)
+                dice_scores = dice_metric(y_pred=preds, y=labels_onehot)
+                #Average dice scores over the batch dimension before accumulation
+                dice_scores = dice_scores.mean(dim=0)
+                if dice_scores.ndim > 1:
+                    dice_scores = dice_scores.squeeze()
+                train_dice_sum += dice_scores
+                train_loss_total += loss.item()
+                steps += 1
 
-            train_epoch_loss += train_loss.item()
-            train_metric = dice_metric(outputs, labels)
-            train_epoch_metric += train_metric
+            print(f"Step {step+1}/{len(train_loader)} => "
+                  f"Loss: {loss.item():.4f} | "
+                  f"Liver Dice: {dice_scores[0].item():.4f} | "
+                  f"Tumor Dice: {dice_scores[1].item():.4f}")
 
-            print(f"{epoch + 1}/{max_epochs} and {train_step}/{len(train_loader) // train_loader.batch_size} => train_loss: {train_loss.item():.4f} and train_metric: {train_metric:.4f}")
+        epoch_loss = train_loss_total / steps
+        epoch_dice = (train_dice_sum / steps).cpu().numpy()
+        avg_dice = epoch_dice.mean()
 
-        print('Saving training data after epoch: ' + str(epoch + 1))
-        train_epoch_loss /= train_step
-        print(f"epoch {epoch + 1} average training loss: {train_epoch_loss:.4f}")
-        save_loss_train.append(train_epoch_loss)
+        save_loss_train.append(epoch_loss)
+        save_metric_train.append(avg_dice)
         np.save(os.path.join(model_dir, 'train_loss.npy'), save_loss_train)
-
-        train_epoch_metric /= train_step
-        print(f"epoch {epoch + 1} average training metric: {train_epoch_metric:.4f}")
-        save_metric_train.append(train_epoch_metric)
         np.save(os.path.join(model_dir, 'train_metric.npy'), save_metric_train)
 
-        if (epoch+1) % test_interval == 0:
+        print(f"✅ Epoch {epoch+1} Train Avg Loss: {epoch_loss:.4f} | "
+              f"Liver Dice: {epoch_dice[0]:.4f}, Tumor Dice: {epoch_dice[1]:.4f}, "
+              f"Avg Dice: {avg_dice:.4f}")
+
+        # ---------- TESTING ----------
+        if (epoch + 1) % test_interval == 0:
             model.eval()
+            test_loss_total = 0.0
+            test_dice_sum = torch.zeros(num_classes - 1, device=device)
+            steps = 0
+
             with torch.no_grad():
-                test_epoch_loss = 0
-                test_metric = 0
-                test_step = 0
-                test_epoch_metric = 0
+                for step, test_data in enumerate(test_loader):
+                    volumes = test_data["image"].to(device)
+                    labels = test_data["label"].to(device)
 
-                for test_data in test_loader:
-                    test_step += 1
-                    volumes = test_data["image"]
-                    labels = test_data["label"]
-                    labels = labels != 0
-                    volumes = volumes.to(device)
-                    labels = labels.to(device)
+                    with autocast(device_type=device.type):
+                        outputs = model(volumes)
+                        loss = loss_function(outputs, labels)
 
-                    outputs = model(volumes)
+                    preds = torch.softmax(outputs, dim=1)
+                    labels_onehot = one_hot(labels, num_classes=num_classes)
+                    dice_scores = dice_metric(y_pred=preds, y=labels_onehot)
+                    # Average dice scores over the batch dimension before accumulation
+                    dice_scores = dice_scores.mean(dim=0)
+                    if dice_scores.ndim > 1:
+                        dice_scores = dice_scores.squeeze()
+                    test_dice_sum += dice_scores
+                    test_loss_total += loss.item()
+                    steps += 1
 
-                    test_loss = loss_function(outputs, labels)
+                    print(f"Step {step+1}/{len(test_loader)} => "
+                          f"Loss: {loss.item():.4f} | "
+                          f"Liver Dice: {dice_scores[0].item():.4f} | "
+                          f"Tumor Dice: {dice_scores[1].item():.4f}")
 
-                    test_epoch_loss += test_loss.item()
-                    test_metric = dice_metric(outputs, labels)
-                    test_epoch_metric += test_metric
+            epoch_test_loss = test_loss_total / steps
+            epoch_test_dice = (test_dice_sum / steps).cpu().numpy()
+            avg_test_dice = epoch_test_dice.mean()
 
-                    print(f"{epoch + 1}/{max_epochs} and {test_step}/{len(test_loader) // test_loader.batch_size} => test_loss: {test_loss.item():.4f} and test_metric: {test_metric:.4f}")
+            save_loss_test.append(epoch_test_loss)
+            save_metric_test.append(avg_test_dice)
+            np.save(os.path.join(model_dir, 'test_loss.npy'), save_loss_test)
+            np.save(os.path.join(model_dir, 'test_metric.npy'), save_metric_test)
 
-                print('Saving testing data after epoch: ' + str(epoch + 1))
-                test_epoch_loss /= test_step
-                print(f"epoch {epoch + 1} average testing loss: {test_epoch_loss:.4f}")
-                save_loss_test.append(test_epoch_loss)
-                np.save(os.path.join(model_dir, 'test_loss.npy'), save_loss_test)
+            print(f"🔍 Epoch {epoch+1} Test Avg Loss: {epoch_test_loss:.4f} | "
+                  f"Liver Dice: {epoch_test_dice[0]:.4f}, Tumor Dice: {epoch_test_dice[1]:.4f}, "
+                  f"Avg Dice: {avg_test_dice:.4f}")
 
-                test_epoch_metric /= test_step
-                print(f"epoch {epoch + 1} average testing metric: {test_epoch_metric:.4f}")
-                save_metric_test.append(test_epoch_metric)
-                np.save(os.path.join(model_dir, 'test_metric.npy'), save_metric_test)
-        
-                if test_epoch_metric > best_metric:
-                    best_metric = test_epoch_metric
-                    best_metric_epoch = epoch + 1
-                    torch.save(model.state_dict(), os.path.join(model_dir, "best_metric_model.pth"))
+            if avg_test_dice > best_metric:
+                best_metric = avg_test_dice
+                best_metric_epoch = epoch + 1
+                model_path = os.path.join(model_dir, f"best_model_epoch{epoch+1}_dice{best_metric:.4f}.pth")
+                torch.save(model.state_dict(), model_path)
+                print(f"💾 Best model saved at epoch {epoch+1} with Avg Dice {best_metric:.4f}")
 
-                print(f"current epoch: {epoch + 1} current test Dice coefficient: {test_epoch_metric:.4f}"
-                    f"\nbest metric: {best_metric:.4f} at epoch: {best_metric_epoch}")
+    print(f"\n🏁 Training complete. Best Avg Dice: {best_metric:.4f} at epoch {best_metric_epoch}")
 
-    print(f"train completed => best_metric: {best_metric:.4f} at epoch: {best_metric_epoch}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
