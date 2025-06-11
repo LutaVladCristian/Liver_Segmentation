@@ -26,7 +26,16 @@ def dice_metric(y_pred, y):
     return dice_coeff
 
 # Function for training the model
-def train(model, data_in, loss_function, optimizer, max_epochs, model_dir, test_interval=1, device=torch.device('cuda:0')):
+def train(
+        model,
+        data_in,
+        loss_function,
+        optimizer,
+        max_epochs,
+        model_dir,
+        test_interval=1,
+        device=torch.device('cuda:0')
+    ):
     best_metric = -1
     best_metric_epoch = -1
     save_loss_train = []

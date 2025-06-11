@@ -26,7 +26,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = "1"
 
 # Paths to the validation set and the model
 validation_path = '../data_set_group_nif/nif_files_validation'
-model_path = '../post_training_best'
+model_path = 'post_training_best'
 
 path_validation_volumes = glob(os.path.join(validation_path, 'images/*'))
 path_validation_labels = glob(os.path.join(validation_path, 'labels/*'))
