@@ -1,14 +1,10 @@
 from monai.utils import first
 import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, precision_score, recall_score
-import seaborn as sns
 import torch
-from torch.cuda.amp import autocast, GradScaler
 import os
 import numpy as np
-from monai.networks.utils import one_hot
 from monai.losses import DiceLoss
-from monai.metrics import DiceMetric
+
 
 # Function for visualizing data
 def show_patient(data, SLICE_NUMBER=1):
@@ -25,145 +21,108 @@ def show_patient(data, SLICE_NUMBER=1):
     plt.show()
 
 
-def dice_metric(y_pred, y, num_classes=3):
-    y = y.long()  # Ensure proper dtype
-    y_onehot = one_hot(y, num_classes)  # y is (B, 1, H, W, D)
-    y_pred_soft = torch.softmax(y_pred, dim=1)
-    y_pred_bin = y_pred_soft.argmax(dim=1, keepdim=True)  # shape: (B, 1, H, W, D)
-    y_pred_onehot = one_hot(y_pred_bin, num_classes)
-
-    dice_per_class = []
-    for i in range(num_classes):
-        intersection = (y_onehot[:, i] * y_pred_onehot[:, i]).sum()
-        union = y_onehot[:, i].sum() + y_pred_onehot[:, i].sum()
-        dice_score = (2. * intersection) / (union + 1e-5)
-        dice_per_class.append(dice_score.item())
-
-    return dice_per_class
-
+# Metric for evaluating the model (Dice coefficient)
+def dice_metric(y_pred, y):
+    dice_loss = DiceLoss(to_onehot_y=True, sigmoid=True, squared_pred=True)
+    dice_coeff = 1 - dice_loss(y_pred, y).item()
+    return dice_coeff
 
 
 # Function for training the model
-def train(model, data_in, num_classes, loss_function, optimizer, max_epochs, model_dir, test_interval=1,
+def train(model, data_in, loss_function, optimizer, max_epochs, model_dir, test_interval=1,
           device=torch.device('cuda:0')):
     best_metric = -1
     best_metric_epoch = -1
-    save_loss_train, save_loss_test = [], []
-    save_metric_train, save_metric_test = [], []
+    save_loss_train = []
+    save_loss_test = []
+    save_metric_train = []
+    save_metric_test = []
     train_loader, test_loader = data_in
 
     for epoch in range(max_epochs):
         model.train()
         train_epoch_loss = 0
         train_step = 0
-        dice_cumulative = np.zeros(num_classes)
+        train_epoch_metric = 0
 
         for batch_data in train_loader:
             train_step += 1
-            volumes = batch_data["image"].to(device)
-            labels = batch_data["label"].to(device)
+            volumes = batch_data["image"]
+            labels = batch_data["label"]
+            labels = labels != 0
+            volumes = volumes.to(device)
+            labels = labels.to(device)
 
             optimizer.zero_grad()
             outputs = model(volumes)
+
             train_loss = loss_function(outputs, labels)
+
             train_loss.backward()
             optimizer.step()
 
             train_epoch_loss += train_loss.item()
-            dice_scores = dice_metric(outputs, labels, num_classes)
-            dice_cumulative += np.array(dice_scores)
+            train_metric = dice_metric(outputs, labels)
+            train_epoch_metric += train_metric
 
-            print(f"Epoch {epoch + 1}, Step {train_step}, Loss: {train_loss.item():.4f}, Dice: {dice_scores}")
+            print(
+                f"{epoch + 1}/{max_epochs} and {train_step}/{len(train_loader)} => train_loss: {train_loss.item():.4f} and train_metric: {train_metric:.4f}")
 
-        avg_train_loss = train_epoch_loss / train_step
-        avg_dice_scores = dice_cumulative / train_step
-        avg_dice = avg_dice_scores.mean()
-
-        print(
-            f"[Epoch {epoch + 1}] Train Loss: {avg_train_loss:.4f}, Dice (mean): {avg_dice:.4f}, Dice (per class): {avg_dice_scores}")
-
-        save_loss_train.append(avg_train_loss)
-        save_metric_train.append(avg_dice)
+        print('Saving training data after epoch: ' + str(epoch + 1))
+        train_epoch_loss /= train_step
+        print(f"epoch {epoch + 1} average training loss: {train_epoch_loss:.4f}")
+        save_loss_train.append(train_epoch_loss)
         np.save(os.path.join(model_dir, 'train_loss.npy'), save_loss_train)
+
+        train_epoch_metric /= train_step
+        print(f"epoch {epoch + 1} average training metric: {train_epoch_metric:.4f}")
+        save_metric_train.append(train_epoch_metric)
         np.save(os.path.join(model_dir, 'train_metric.npy'), save_metric_train)
 
         if (epoch + 1) % test_interval == 0:
             model.eval()
             with torch.no_grad():
                 test_epoch_loss = 0
-                dice_cumulative = np.zeros(num_classes)
-                all_preds = []
-                all_labels = []
+                test_metric = 0
                 test_step = 0
+                test_epoch_metric = 0
 
                 for test_data in test_loader:
                     test_step += 1
-                    volumes = test_data["image"].to(device)
-                    labels = test_data["label"].to(device)
+                    volumes = test_data["image"]
+                    labels = test_data["label"]
+                    labels = labels != 0
+                    volumes = volumes.to(device)
+                    labels = labels.to(device)
 
                     outputs = model(volumes)
+
                     test_loss = loss_function(outputs, labels)
+
                     test_epoch_loss += test_loss.item()
+                    test_metric = dice_metric(outputs, labels)
+                    test_epoch_metric += test_metric
 
-                    dice_scores = dice_metric(outputs, labels, num_classes)
-                    dice_cumulative += np.array(dice_scores)
+                    print(
+                        f"{epoch + 1}/{max_epochs} and {test_step}/{len(test_loader)} => test_loss: {test_loss.item():.4f} and test_metric: {test_metric:.4f}")
 
-                    preds = torch.argmax(outputs, dim=1).cpu().numpy().astype(np.uint8).flatten()
-                    gts = labels.cpu().numpy().astype(np.uint8).flatten()
-                    all_preds.extend(preds)
-                    all_labels.extend(gts)
-
-                avg_test_loss = test_epoch_loss / test_step
-                avg_dice_scores = dice_cumulative / test_step
-                avg_dice = avg_dice_scores.mean()
-
-                cm = confusion_matrix(all_labels, all_preds, labels=list(range(num_classes)))
-                precision = precision_score(all_labels, all_preds, labels=list(range(num_classes)), average=None,
-                                            zero_division=0)
-                recall = recall_score(all_labels, all_preds, labels=list(range(num_classes)), average=None,
-                                      zero_division=0)
-
-                print(f"[Epoch {epoch + 1}] Test Loss: {avg_test_loss:.4f}, Dice (mean): {avg_dice:.4f}")
-                print(f"Dice per class: {avg_dice_scores}")
-                print(f"Precision per class: {precision}")
-                print(f"Recall per class: {recall}")
-                print(f"Confusion Matrix:\n{cm}")
-
-                save_loss_test.append(avg_test_loss)
-                save_metric_test.append(avg_dice)
+                print('Saving testing data after epoch: ' + str(epoch + 1))
+                test_epoch_loss /= test_step
+                print(f"epoch {epoch + 1} average testing loss: {test_epoch_loss:.4f}")
+                save_loss_test.append(test_epoch_loss)
                 np.save(os.path.join(model_dir, 'test_loss.npy'), save_loss_test)
+
+                test_epoch_metric /= test_step
+                print(f"epoch {epoch + 1} average testing metric: {test_epoch_metric:.4f}")
+                save_metric_test.append(test_epoch_metric)
                 np.save(os.path.join(model_dir, 'test_metric.npy'), save_metric_test)
 
-                if avg_dice > best_metric:
-                    best_metric = avg_dice
+                if test_epoch_metric > best_metric:
+                    best_metric = test_epoch_metric
                     best_metric_epoch = epoch + 1
                     torch.save(model.state_dict(), os.path.join(model_dir, "best_metric_model.pth"))
 
-                # Optional: visualize confusion matrix
-                plt.figure(figsize=(6, 5))
-                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=["BG", "Liver", "Tumor"],
-                            yticklabels=["BG", "Liver", "Tumor"])
-                plt.title(f'Confusion Matrix (Epoch {epoch + 1})')
-                plt.xlabel('Predicted')
-                plt.ylabel('True')
-                plt.tight_layout()
-                plt.savefig(os.path.join(model_dir, f'conf_matrix_epoch_{epoch + 1}.png'))
-                plt.close()
+                print(f"current epoch: {epoch + 1} current test Dice coefficient: {test_epoch_metric:.4f}"
+                      f"\nbest metric: {best_metric:.4f} at epoch: {best_metric_epoch}")
 
-    print(f"Training complete. Best Dice: {best_metric:.4f} at epoch {best_metric_epoch}")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    print(f"train completed => best_metric: {best_metric:.4f} at epoch: {best_metric_epoch}")

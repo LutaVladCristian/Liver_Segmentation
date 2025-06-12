@@ -30,7 +30,7 @@ print(device)
 model = UNet(
     spatial_dims=3,
     in_channels=1,
-    out_channels=3,
+    out_channels=2,
     channels=(16, 32, 64, 128, 256), 
     strides=(2, 2, 2, 2),
     num_res_units=2,
@@ -49,11 +49,10 @@ if __name__ == '__main__':
 
     train(model=model,
           data_in=data_in,
-          num_classes=3,
           loss_function=loss_function,
           optimizer=optimizer,
-          max_epochs=10,
+          max_epochs=100,
           model_dir=model_dir,
-          test_interval=1,
+          test_interval=4,
           device=device
     )
