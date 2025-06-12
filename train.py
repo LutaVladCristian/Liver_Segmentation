@@ -4,7 +4,7 @@ from glob import glob
 import torch
 import numpy as np
 
-from monai.networks.nets import UNet
+from monai.networks.nets import UNet, AttentionUnet, UNETR, SwinUNETR, VNet
 from monai.networks.layers import Norm
 from monai.losses import DiceLoss, TverskyLoss, DiceFocalLoss
 from monai.utils import set_determinism
@@ -26,15 +26,13 @@ data_in = preprocess_data(nif_path, batch_size=8, spatial_size=(96, 96, 16))
 device = torch.device("cuda:0")
 print(device)
 
-# Initialize the 3D U-Net model
-model = UNet(
+# Initialize the model
+model = AttentionUnet(
     spatial_dims=3,
     in_channels=1,
     out_channels=2,
-    channels=(16, 32, 64, 128, 256), 
-    strides=(2, 2, 2, 2),
-    num_res_units=2,
-    norm=Norm.BATCH,
+    channels=(16, 32, 64, 128, 256),
+    strides=(2, 2, 2, 2)
 ).to(device)
 
 # Initialize the loss function and the optimizer
@@ -44,7 +42,7 @@ optimizer = torch.optim.Adam(model.parameters(), 1e-4, weight_decay=1e-5, amsgra
 
 # Train the model
 if __name__ == '__main__':
-    model_dir = 'trained_models/post_training_Unet'
+    model_dir = 'trained_models/post_training_AttentionUnet'
     os.makedirs(model_dir, exist_ok=True)
 
     train(model=model,
