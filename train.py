@@ -46,7 +46,7 @@ optimizer = torch.optim.Adam(model.parameters(), 1e-4, weight_decay=1e-5, amsgra
 
 # Train the model
 if __name__ == '__main__':
-    model_dir = 'trained_models/post_training_UNETR'
+    model_dir = 'trained_models/post_training_AttentionUNet'
     os.makedirs(model_dir, exist_ok=True)
 
     train(model=model,
