@@ -1,9 +1,53 @@
+from pathlib import Path
 from monai.utils import first
 import matplotlib.pyplot as plt
 import torch
 import os
 import numpy as np
 from monai.losses import DiceLoss
+import nibabel as nib
+import pandas as pd
+from glob import glob
+
+
+# Function to retain in an Excel doc the metadata of the dataset before preprocessing
+def get_initial_meta_data(nifti_dirs, doc_name):
+    records = []
+    for d in nifti_dirs:
+        for f in glob(os.path.join(d, "*.nii.gz")):
+            nii = nib.load(f)
+            s = nii.shape
+            sp = nii.header.get_zooms()
+
+            d_parts = Path(f).parts
+
+            # Determine 'split' from a path
+            if any("training" in part.lower() for part in d_parts):
+                split = "training"
+            elif any("testing" in part.lower() for part in d_parts):
+                split = "testing"
+            else:
+                split = "unknown"
+
+            records.append({
+                "file_name": os.path.basename(f),
+                "split": split,
+                "type": d_parts[-1],  # 'images'
+                "shape_x": s[0], "shape_y": s[1], "shape_z": s[2],
+                "spacing_x": sp[0], "spacing_y": sp[1], "spacing_z": sp[2]
+            })
+
+    df = pd.DataFrame(records)
+
+    os.makedirs('metadata', exist_ok=True)
+    df.to_csv('metadata/' + doc_name + '.csv', index=False)
+
+    avg_spacing = (
+        df['spacing_x'].mean(),
+        df['spacing_y'].mean(),
+        df['spacing_z'].mean()
+    )
+    return avg_spacing
 
 
 # Function for visualizing data

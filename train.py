@@ -9,7 +9,7 @@ from monai.networks.layers import Norm
 from monai.losses import DiceLoss, TverskyLoss, DiceFocalLoss
 from monai.utils import set_determinism
 
-from utilities import train
+from utilities import train, get_initial_meta_data
 from preprocess import preprocess_data
 
 
@@ -19,25 +19,26 @@ nif_path = ['data_set_group_nif/nif_files_testing/images',
             'data_set_group_nif/nif_files_training/images',
             'data_set_group_nif/nif_files_training/labels',]
 
+# Save the metadata of the entire training set
+pix_dim_avg = get_initial_meta_data(nif_path, 'training_volumes')
+print(pix_dim_avg)
+
 # Preprocess the data
-data_in = preprocess_data(nif_path, batch_size=8, spatial_size=(96, 96, 16))
+data_in = preprocess_data(nif_path, batch_size=8, spatial_size=(96, 96, 16), pixdim=pix_dim_avg)
 
 # We do the training on the GPU
 device = torch.device("cuda:0")
 print(device)
 
 # Initialize the model
-model = UNETR(
+model = UNet(
+    spatial_dims=3,
     in_channels=1,
     out_channels=2,
-    img_size=(96, 96, 16),
-    feature_size=16,            # Base channel size; you can try 32 if you have more memory
-    hidden_size=768,            # Transformer hidden dimension
-    mlp_dim=3072,               # Feedforward dim in Transformer
-    num_heads=12,               # Attention heads
-    norm_name='instance',       # Normalization layer
-    res_block=True,             # Use residual blocks in conv path
-    dropout_rate=0.0            # You can adjust this
+    channels=(16, 32, 64, 128, 256),
+    strides=(2, 2, 2, 2),
+    num_res_units=2,
+    norm=Norm.BATCH,
 ).to(device)
 
 # Initialize the loss function and the optimizer
