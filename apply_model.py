@@ -1,9 +1,3 @@
-"""
-Created on Thu Apr  6 14:29:08 2023
-
-@author: vlad_cristian.luta
-"""
-
 from monai.utils import first
 from monai.networks.nets import UNet
 from monai.networks.layers import Norm
@@ -31,7 +25,7 @@ import nibabel as nib
 os.environ['KMP_DUPLICATE_LIB_OK'] = "1"
 
 # Paths to the validation set and the model
-validation_path = 'data_set_group_nif/nif_files_validation'
+validation_path = '../data_set_group_nif/nif_files_validation'
 model_path = 'post_training_best'
 
 path_validation_volumes = glob(os.path.join(validation_path, 'images/*'))
