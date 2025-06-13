@@ -31,12 +31,17 @@ device = torch.device("cuda:0")
 print(device)
 
 # Initialize the model
-model = AttentionUnet(
-    spatial_dims=3,
+model = UNETR(
     in_channels=1,
     out_channels=2,
-    channels=(16, 32, 64, 128),
-    strides=(2, 2, 2)
+    img_size=(96, 96, 16),
+    feature_size=16,
+    hidden_size=768,
+    mlp_dim=3072,
+    num_heads=12,
+    norm_name="instance",
+    res_block=True,
+    dropout_rate=0.0
 ).to(device)
 
 # Initialize the loss function and the optimizer
@@ -46,7 +51,7 @@ optimizer = torch.optim.Adam(model.parameters(), 1e-4, weight_decay=1e-5, amsgra
 
 # Train the model
 if __name__ == '__main__':
-    model_dir = 'trained_models/post_training_AttentionUNet'
+    model_dir = 'trained_models/post_training_UNETR'
     os.makedirs(model_dir, exist_ok=True)
 
     train(model=model,
