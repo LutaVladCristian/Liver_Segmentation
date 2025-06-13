@@ -24,3 +24,4 @@ dependencies:
       - tqdm
       - seaborn
       - scikit-learn
+      - einops
