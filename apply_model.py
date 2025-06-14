@@ -48,7 +48,6 @@ validation_transforms = Compose(
     ]
 )
 
-
 # Create the validation dataset
 validation_ds = CacheDataset(data=validation_files, transform=validation_transforms)
 validation_loader = DataLoader(validation_ds, batch_size=1)
