@@ -33,7 +33,7 @@ data_in = preprocess_data(
     pixdim=pix_dim_avg
 )
 
-# Initialize the model
+# Initialize the models
 model1 = UNETR(
     img_size=(128, 128, 32),
     in_channels=1,
@@ -63,7 +63,7 @@ model3 = UNet(
   strides=(2, 2, 2),
   num_res_units=2,
   norm=Norm.BATCH,
-)
+).to(device)
 
 model4 = SegResNet(
     spatial_dims=3,
@@ -74,30 +74,37 @@ model4 = SegResNet(
     blocks_up=(1, 1, 1),
     upsample_mode="deconv",
     dropout_prob=0.2
-)
+).to(device)
 
-model5 = VNet(
+model = VNet(
     spatial_dims=3,
     in_channels=1,
     out_channels=2,
-    dropout_prob=0.1
+    dropout_prob_down=0.5,
+    dropout_prob_up=(0.5, 0.5),
+    dropout_dim=3,
+    bias=False
 ).to(device)
 
 # Initialize the loss function and the optimizer
 loss_function = DiceFocalLoss(to_onehot_y=True, softmax=True, lambda_focal=0.5)
 optimizer = torch.optim.Adam(model.parameters(), 1e-4, weight_decay=1e-5, amsgrad=True)
 
+model_dir = 'trained_models/post_training_VNet_128_128_32'
+os.makedirs(model_dir, exist_ok=True)
+
+# Uncomment only if you want to start training for a pretrained model
+#model.load_state_dict(torch.load(os.path.join(model_dir, 'best_metric_model.pth')))
 
 # Train the model
 if __name__ == '__main__':
-    model_dir = 'trained_models/post_training_UNETR_128_128_32'
-    os.makedirs(model_dir, exist_ok=True)
 
     train(model=model,
           data_in=data_in,
           loss_function=loss_function,
           optimizer=optimizer,
           max_epochs=100,
+          #start_epoch=80,
           model_dir=model_dir,
           test_interval=4,
           device=device

@@ -51,17 +51,17 @@ def get_initial_meta_data(nifti_dirs, doc_name):
 
 
 # Function for visualizing data
-def show_patient(data, SLICE_NUMBER=1):
+def show_patient(data, slice_no=1):
     view_patient = first(data)
 
     plt.figure("Visualization", (12, 6))
     plt.subplot(1, 2, 1)
-    plt.title(f"image {SLICE_NUMBER}")
-    plt.imshow(view_patient["image"][0, 0, :, :, SLICE_NUMBER], cmap="gray")
+    plt.title(f"image {slice_no}")
+    plt.imshow(view_patient["image"][0, 0, :, :, slice_no], cmap="gray")
 
     plt.subplot(1, 2, 2)
-    plt.title(f"label {SLICE_NUMBER}")
-    plt.imshow(view_patient["label"][0, 0, :, :, SLICE_NUMBER])
+    plt.title(f"label {slice_no}")
+    plt.imshow(view_patient["label"][0, 0, :, :, slice_no])
     plt.show()
 
 
@@ -73,7 +73,7 @@ def dice_metric(y_pred, y):
 
 
 # Function for training the model
-def train(model, data_in, loss_function, optimizer, max_epochs, model_dir, test_interval=1,
+def train(model, data_in, loss_function, optimizer, model_dir, max_epochs, start_epoch=0, test_interval=1,
           device=torch.device('cuda:0')):
     best_metric = -1
     best_metric_epoch = -1
@@ -83,7 +83,7 @@ def train(model, data_in, loss_function, optimizer, max_epochs, model_dir, test_
     save_metric_test = []
     train_loader, test_loader = data_in
 
-    for epoch in range(max_epochs):
+    for epoch in range(start_epoch, max_epochs):
         model.train()
         train_epoch_loss = 0
         train_step = 0
@@ -127,7 +127,6 @@ def train(model, data_in, loss_function, optimizer, max_epochs, model_dir, test_
             model.eval()
             with torch.no_grad():
                 test_epoch_loss = 0
-                test_metric = 0
                 test_step = 0
                 test_epoch_metric = 0
 
