@@ -1,17 +1,18 @@
 from monai.utils import first
-from monai.networks.nets import UNet
+from monai.networks.nets import UNet, SegResNet, AttentionUnet, UNETR, VNet
 from monai.networks.layers import Norm
 from monai.data import DataLoader, CacheDataset
 from monai.transforms import(
     Compose,
-    EnsureChannelFirstd,
     LoadImaged,
-    Resized,
-    ToTensord,
+    EnsureChannelFirstd,
     Spacingd,
     Orientationd,
     ScaleIntensityRanged,
     CropForegroundd,
+    Resized,
+    EnsureTyped,
+    ToTensord,
 )
 
 import torch
@@ -21,29 +22,33 @@ from glob import glob
 import numpy as np
 import nibabel as nib
 
+from train import pix_dim_avg
 
-os.environ['KMP_DUPLICATE_LIB_OK'] = "1"
+
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 # Paths to the validation set and the model
 validation_path = '../data_set_group_nif/nif_files_validation'
-model_path = 'post_training_best'
+model_path = 'trained_models'
 
 path_validation_volumes = glob(os.path.join(validation_path, 'images/*'))
 path_validation_labels = glob(os.path.join(validation_path, 'labels/*'))
 
 validation_files = [{'image': image_name, 'label': label_name} for image_name, label_name in zip(path_validation_volumes, path_validation_labels)]
 
+print(pix_dim_avg)
 
 # Transforms for the validation set
 validation_transforms = Compose(
     [
         LoadImaged(keys=["image", "label"]),
         EnsureChannelFirstd(keys=["image", "label"]),
-        Spacingd(keys=["image", "label"], pixdim=(1.5,1.5,1.0), mode=("bilinear", "nearest")),
+        Spacingd(keys=["image", "label"], pixdim=(0.7871384, 0.7871384, 1.2131842), mode=("bilinear", "nearest")),
         Orientationd(keys=["image", "label"], axcodes="RAS"),
-        ScaleIntensityRanged(keys=["image"], a_min=-200, a_max=200,b_min=0.0, b_max=1.0, clip=True), 
+        ScaleIntensityRanged(keys=["image"], a_min=-200, a_max=250,b_min=0.0, b_max=1.0, clip=True),
         CropForegroundd(keys=["image", "label"], source_key='image'),
-        Resized(keys=["image", "label"], spatial_size=[256,256,16]),   
+        Resized(keys=["image", "label"], spatial_size=(128, 128, 32)),
+        EnsureTyped(keys=["image", "label"]),
         ToTensord(keys=["image", "label"]),
     ]
 )
