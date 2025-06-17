@@ -1,36 +1,22 @@
-"""
-Created on Thu Apr  6 14:29:08 2023
-
-@author: vlad_cristian.luta
-"""
-
-from vedo import load
+from vedo import load, Plotter
 from vedo.applications import RayCastPlotter, IsosurfaceBrowser
 
-
 def visualize_volumes(data_in):
-    # Load the NIfTI file
-    vol = load(data_in + '/volume.nii')
+    # Load the NIfTI volume
+    vol = load(data_in + '/segmentation.nii')
 
-    # Show the segmented volume
-    # Ray Casting
-    plt = RayCastPlotter(vol, bg='black', bg2='blackboard', axes=7)  # Plotter instance
+    # Visualize with RayCasting (raw volume)
+    plt = RayCastPlotter(vol, bg='black', bg2='blackboard', axes=7)
     plt.show(viewup="z").close()
 
-    # Marching Cubes
-    plt = IsosurfaceBrowser(vol, use_gpu=True, c='gold') # Plotter instance
-    plt.show(axes=7, bg2='lb').close()
+    # Extract surface with marching cubes
+    surface = vol.isosurface(0.5)  # adjust threshold if needed
 
-    # Load the NIfTI file
-    vol2 = load(data_in + '/segmentation.nii')
+    # Smooth the mesh
+    surface_smooth = surface.clone().smoothWSinc(niter=50, pass_band=0.1)
 
-    # Show the segmented volume
-    # Ray Casting
-    plt = RayCastPlotter(vol2, bg='black', bg2='blackboard', axes=7)  # Plotter instance
-    plt.show(viewup="z").close()
-
-    # Marching Cubes
-    plt = IsosurfaceBrowser(vol2, use_gpu=True, c='gold') # Plotter instance
-    plt.show(axes=7, bg2='lb').close()
+    # Show smoothed surface (as a mesh, not a browser)
+    vp = Plotter(title="Smoothed Mesh", axes=7, bg2='lb')
+    vp.show(surface_smooth, viewup="z").close()
 
 visualize_volumes('volumes')
