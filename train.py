@@ -65,7 +65,7 @@ model3 = UNet(
   norm=Norm.BATCH,
 ).to(device)
 
-model4 = SegResNet(
+model = SegResNet(
     spatial_dims=3,
     in_channels=1,
     out_channels=2,
@@ -76,7 +76,7 @@ model4 = SegResNet(
     dropout_prob=0.2
 ).to(device)
 
-model = VNet(
+model5 = VNet(
     spatial_dims=3,
     in_channels=1,
     out_channels=2,
@@ -90,11 +90,11 @@ model = VNet(
 loss_function = DiceFocalLoss(to_onehot_y=True, softmax=True, lambda_focal=0.5)
 optimizer = torch.optim.Adam(model.parameters(), 1e-4, weight_decay=1e-5, amsgrad=True)
 
-model_dir = 'trained_models/post_training_VNet_128_128_32'
+model_dir = 'trained_models/post_training_SegResNet_128_128_32'
 os.makedirs(model_dir, exist_ok=True)
 
 # Uncomment only if you want to start training for a pretrained model
-#model.load_state_dict(torch.load(os.path.join(model_dir, 'best_metric_model.pth')))
+model.load_state_dict(torch.load(os.path.join(model_dir, 'best_metric_model.pth')))
 
 # Train the model
 if __name__ == '__main__':
@@ -104,7 +104,7 @@ if __name__ == '__main__':
           loss_function=loss_function,
           optimizer=optimizer,
           max_epochs=100,
-          #start_epoch=80,
+          #start_epoch=28,
           model_dir=model_dir,
           test_interval=4,
           device=device
